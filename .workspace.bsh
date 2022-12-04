@@ -1,4 +1,4 @@
 on save by-name Cargo.toml add cargo clippy --workspace
 on save by-ext .rs add cargo clippy --workspace
 on save by-ext .rs add cargo test
-on save by-prefix solutions/day-01 add cargo test -- day_01
+on save by-prefix solutions/day-02 add cargo test -- day_02

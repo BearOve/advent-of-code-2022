@@ -81,5 +81,9 @@ mod tests {
         )+}
     }
 
-    impl_tests!(day_01 = (test = ("24000", "45000"), user = ("75622", "213159"),),);
+    impl_tests!(
+        day_01 = (test = ("24000", "45000"), user = ("75622", "213159"),),
+        day_02 = (test = ("15", "12"), user = ("8392", "10116"),),
+        //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
+    );
 }
