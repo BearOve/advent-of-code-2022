@@ -1,7 +1,7 @@
 use eyre::{ensure, eyre, Result, WrapErr};
 use rhai::plugin::*;
 use rhai::{Array, EvalAltResult, Locked, Shared, INT};
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 mod aoc_data;
 mod int_array;
@@ -11,6 +11,16 @@ fn index_not_found(index: impl Into<Dynamic>) -> Box<EvalAltResult> {
         index.into(),
         Position::NONE,
     ))
+}
+
+#[export_module]
+mod blob_extras {
+    #[rhai_fn(pure, name = "intersection")]
+    pub fn blobs_intersection(a: &mut rhai::Blob, b: rhai::Blob) -> rhai::Blob {
+        let a: HashSet<u8> = a.iter().copied().collect();
+        let b: HashSet<u8> = b.iter().copied().collect();
+        a.intersection(&b).copied().collect()
+    }
 }
 
 fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
@@ -25,9 +35,11 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
 
     engine.register_global_module(exported_module!(aoc_data).into());
     engine.register_global_module(exported_module!(int_array).into());
+    engine.register_global_module(exported_module!(blob_extras).into());
 
     // ToDo: Is there no magic to register this in the module?
     engine.register_iterator::<aoc_data::Lines>();
+    engine.register_iterator::<aoc_data::Blobs>();
 
     engine
         .eval_file_with_scope(&mut scope, script_path.clone())
@@ -74,7 +86,8 @@ mod tests {
                     let data = concat!(stringify!($name), ".dat");
                     println!("\n\nRunning script with {data}");
                     let res = run_script(day, data)?;
-                    assert_eq!(res, [$p1, $p2]);
+                    assert_eq!(res[0], $p1, "day {day} part1 failed");
+                    assert_eq!(res[1], $p2, "day {day} part2 failed");
                 })+
                 Ok(())
             }
@@ -84,6 +97,7 @@ mod tests {
     impl_tests!(
         day_01 = (test = ("24000", "45000"), user = ("75622", "213159"),),
         day_02 = (test = ("15", "12"), user = ("8392", "10116"),),
+        day_03 = (test = ("157", "70"), user = ("8176", "2689"),),
         //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
     );
 }

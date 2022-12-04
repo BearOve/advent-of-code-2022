@@ -32,6 +32,10 @@ mod aoc_data {
         Lines { data }
     }
 
+    pub fn blobs(data: SharedAocData) -> Blobs {
+        Blobs { data }
+    }
+
     #[derive(Clone)]
     pub struct Lines {
         data: SharedAocData,
@@ -49,6 +53,29 @@ mod aoc_data {
                 .wrap_err_with(|| format!("Failed to read the next line from {:?}", data.path))
                 .unwrap(); // ToDo: Fallible iterator support?
             while matches!(ret.as_bytes().last(), Some(b'\r' | b'\n')) {
+                ret.pop();
+            }
+            (actual > 0).then_some(ret)
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct Blobs {
+        data: SharedAocData,
+    }
+
+    impl Iterator for Blobs {
+        type Item = rhai::Blob;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let mut data = self.data.borrow_mut();
+            let mut ret = Vec::new();
+            let actual = data
+                .file
+                .read_until(b'\n', &mut ret)
+                .wrap_err_with(|| format!("Failed to read the next line from {:?}", data.path))
+                .unwrap(); // ToDo: Fallible iterator support?
+            while matches!(ret.last(), Some(b'\r' | b'\n')) {
                 ret.pop();
             }
             (actual > 0).then_some(ret)
