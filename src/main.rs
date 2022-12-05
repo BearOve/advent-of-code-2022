@@ -1,9 +1,11 @@
+use crate::dyn_iterator::DynIterator;
 use eyre::{ensure, eyre, Result, WrapErr};
 use rhai::plugin::*;
 use rhai::{Array, EvalAltResult, Locked, Shared, INT};
 use std::{collections::HashSet, path::PathBuf};
 
 mod aoc_data;
+mod dyn_iterator;
 mod int_array;
 
 fn index_not_found(index: impl Into<Dynamic>) -> Box<EvalAltResult> {
@@ -36,10 +38,13 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     engine.register_global_module(exported_module!(aoc_data).into());
     engine.register_global_module(exported_module!(int_array).into());
     engine.register_global_module(exported_module!(blob_extras).into());
+    engine.register_global_module(exported_module!(dyn_iterator).into());
 
     // ToDo: Is there no magic to register this in the module?
     engine.register_iterator::<aoc_data::Lines>();
     engine.register_iterator::<aoc_data::Blobs>();
+    engine.register_iterator::<DynIterator<Vec<String>>>();
+    engine.register_iterator::<DynIterator<Vec<Dynamic>>>();
 
     engine
         .eval_file_with_scope(&mut scope, script_path.clone())
@@ -98,6 +103,7 @@ mod tests {
         day_01 = (test = ("24000", "45000"), user = ("75622", "213159"),),
         day_02 = (test = ("15", "12"), user = ("8392", "10116"),),
         day_03 = (test = ("157", "70"), user = ("8176", "2689"),),
+        day_04 = (test = ("2", "4"), user = ("562", "924"),),
         //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
     );
 }

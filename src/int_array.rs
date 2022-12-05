@@ -90,7 +90,7 @@ mod int_array {
     }
 
     #[rhai_fn(pure)]
-    pub fn to_string(array: &mut SharedIntArray) -> String {
+    pub fn to_debug(array: &mut SharedIntArray) -> String {
         format!("{:?}", array.borrow().values)
     }
 
