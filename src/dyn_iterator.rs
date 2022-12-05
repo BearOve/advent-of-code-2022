@@ -10,7 +10,7 @@ mod dyn_iterator {
     }
 
     impl<T> DynIterator<T> {
-        fn new(it: impl Iterator<Item = T> + 'static) -> Self {
+        pub fn new(it: impl Iterator<Item = T> + 'static) -> Self {
             Self {
                 it: Shared::new(Locked::new(Box::new(it))),
             }

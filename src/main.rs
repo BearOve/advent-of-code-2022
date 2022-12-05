@@ -25,6 +25,75 @@ mod blob_extras {
     }
 }
 
+#[export_module]
+mod string_extras {
+    pub fn chunks(a: String, len: INT) -> DynIterator<String> {
+        let len = usize::try_from(len).unwrap();
+        let mut i = 0;
+        DynIterator::new(std::iter::from_fn(move || {
+            if let Some((end, _)) = a[i..].char_indices().nth(len) {
+                let end = end + i;
+                let ret = String::from(&a[i..end]);
+                i = end;
+                Some(ret)
+            } else if i < a.len() {
+                let ret = String::from(&a[i..]);
+                i = a.len();
+                Some(ret)
+            } else {
+                None
+            }
+        }))
+    }
+}
+
+#[export_module]
+mod int_extras {
+    #[rhai_fn(name = "max")]
+    pub fn max_int_int(a: INT, b: INT) -> INT {
+        a.max(b)
+    }
+}
+
+#[export_module]
+mod assert {
+    use super::*;
+
+    struct Error(String);
+
+    impl Error {
+        pub fn create(e: String) -> Box<EvalAltResult> {
+            Box::new(EvalAltResult::ErrorSystem(
+                "Assertation failed".to_string(),
+                Box::new(Error(e)),
+            ))
+        }
+    }
+
+    impl std::error::Error for Error {}
+
+    impl std::fmt::Display for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            std::fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    impl std::fmt::Debug for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            std::fmt::Debug::fmt(&self.0, f)
+        }
+    }
+
+    #[rhai_fn(name = "assert_eq", return_raw)]
+    pub fn assert_eq_int(a: INT, b: INT) -> Result<(), Box<EvalAltResult>> {
+        if a == b {
+            Ok(())
+        } else {
+            Err(Error::create(format!("{a} != {b}")))
+        }
+    }
+}
+
 fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     let dir = PathBuf::from(format!("solutions/day-{day:02}"));
     let script_path = dir.join("script.rhai");
@@ -39,10 +108,14 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     engine.register_global_module(exported_module!(int_array).into());
     engine.register_global_module(exported_module!(blob_extras).into());
     engine.register_global_module(exported_module!(dyn_iterator).into());
+    engine.register_global_module(exported_module!(string_extras).into());
+    engine.register_global_module(exported_module!(int_extras).into());
+    engine.register_global_module(exported_module!(assert).into());
 
     // ToDo: Is there no magic to register this in the module?
     engine.register_iterator::<aoc_data::Lines>();
     engine.register_iterator::<aoc_data::Blobs>();
+    engine.register_iterator::<DynIterator<String>>();
     engine.register_iterator::<DynIterator<Vec<String>>>();
     engine.register_iterator::<DynIterator<Vec<Dynamic>>>();
 
@@ -104,6 +177,7 @@ mod tests {
         day_02 = (test = ("15", "12"), user = ("8392", "10116"),),
         day_03 = (test = ("157", "70"), user = ("8176", "2689"),),
         day_04 = (test = ("2", "4"), user = ("562", "924"),),
+        day_05 = (test = ("CMZ", "MCD"), user = ("QNNTGTPFN", "GGNPJBTTR"),),
         //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
     );
 }
