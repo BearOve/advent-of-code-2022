@@ -6,3 +6,4 @@ on save by-prefix solutions/day-02 add cargo test -- day_02
 on save by-prefix solutions/day-03 add cargo test -- day_03
 on save by-prefix solutions/day-04 add cargo test -- day_04
 on save by-prefix solutions/day-05 add cargo test -- day_05
+on save by-prefix solutions/day-06 add cargo test -- day_06

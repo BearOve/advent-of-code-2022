@@ -23,6 +23,12 @@ mod blob_extras {
         let b: HashSet<u8> = b.iter().copied().collect();
         a.intersection(&b).copied().collect()
     }
+
+    #[rhai_fn(pure, name = "unique_count")]
+    pub fn blobs_unique_count(a: &mut rhai::Blob) -> INT {
+        let a: HashSet<u8> = a.iter().copied().collect();
+        a.len().try_into().unwrap()
+    }
 }
 
 #[export_module]
@@ -178,6 +184,10 @@ mod tests {
         day_03 = (test = ("157", "70"), user = ("8176", "2689"),),
         day_04 = (test = ("2", "4"), user = ("562", "924"),),
         day_05 = (test = ("CMZ", "MCD"), user = ("QNNTGTPFN", "GGNPJBTTR"),),
+        day_06 = (
+            test = ("[7, 5, 6, 10, 11]", "[19, 23, 23, 29, 26]"),
+            user = ("[1855]", "[3256]"),
+        ),
         //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
     );
 }
