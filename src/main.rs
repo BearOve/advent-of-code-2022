@@ -17,23 +17,47 @@ fn index_not_found(index: impl Into<Dynamic>) -> Box<EvalAltResult> {
 
 #[export_module]
 mod blob_extras {
-    #[rhai_fn(pure, name = "intersection")]
-    pub fn blobs_intersection(a: &mut rhai::Blob, b: rhai::Blob) -> rhai::Blob {
+    #[rhai_fn(pure)]
+    pub fn intersection(a: &mut rhai::Blob, b: rhai::Blob) -> rhai::Blob {
         let a: HashSet<u8> = a.iter().copied().collect();
         let b: HashSet<u8> = b.iter().copied().collect();
         a.intersection(&b).copied().collect()
     }
 
-    #[rhai_fn(pure, name = "unique_count")]
-    pub fn blobs_unique_count(a: &mut rhai::Blob) -> INT {
+    #[rhai_fn(pure)]
+    pub fn unique_count(a: &mut rhai::Blob) -> INT {
         let a: HashSet<u8> = a.iter().copied().collect();
         a.len().try_into().unwrap()
+    }
+
+    #[rhai_fn(pure, name = "==")]
+    pub fn eq_string(a: &mut rhai::Blob, b: ImmutableString) -> bool {
+        a == b.as_bytes()
+    }
+
+    pub fn strip_prefix(a: &mut rhai::Blob, prefix: ImmutableString) -> bool {
+        if a.starts_with(prefix.as_bytes()) {
+            a.copy_within(prefix.len().., 0);
+            a.truncate(a.len() - prefix.len());
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn rstrip_off(a: &mut rhai::Blob, delim: INT) {
+        if let Ok(delim) = u8::try_from(delim) {
+            if let Some(suff) = a.rsplit(|&b| b == delim).next() {
+                let len = suff.len() + 1;
+                a.truncate(a.len() - len);
+            }
+        }
     }
 }
 
 #[export_module]
 mod string_extras {
-    pub fn chunks(a: String, len: INT) -> DynIterator<String> {
+    pub fn chunks(a: ImmutableString, len: INT) -> DynIterator<String> {
         let len = usize::try_from(len).unwrap();
         let mut i = 0;
         DynIterator::new(std::iter::from_fn(move || {
@@ -98,6 +122,15 @@ mod assert {
             Err(Error::create(format!("{a} != {b}")))
         }
     }
+
+    #[rhai_fn(return_raw)]
+    pub fn assert(a: bool) -> Result<(), Box<EvalAltResult>> {
+        if a {
+            Ok(())
+        } else {
+            Err(Error::create(String::new()))
+        }
+    }
 }
 
 fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
@@ -109,6 +142,8 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     let mut scope = rhai::Scope::new();
 
     scope.push("data", aoc_data::AocData::load(data_path)?);
+
+    engine.set_fast_operators(false);
 
     engine.register_global_module(exported_module!(aoc_data).into());
     engine.register_global_module(exported_module!(int_array).into());
@@ -162,19 +197,18 @@ mod tests {
                 $($name:ident=($p1:literal, $p2:literal),)+
             )
         ,)+) => {$(
-            #[test]
-            fn $day() -> Result<()> {
-                let day = stringify!($day).split_once('_').unwrap().1.parse()?;
-
-                $({
+            mod $day {$(
+                #[test]
+                fn $name() -> super::Result<()> {
+                    let day = stringify!($day).split_once('_').unwrap().1.parse()?;
                     let data = concat!(stringify!($name), ".dat");
                     println!("\n\nRunning script with {data}");
-                    let res = run_script(day, data)?;
+                    let res = super::run_script(day, data)?;
                     assert_eq!(res[0], $p1, "day {day} part1 failed");
                     assert_eq!(res[1], $p2, "day {day} part2 failed");
-                })+
-                Ok(())
-            }
+                    Ok(())
+                }
+            )+}
         )+}
     }
 
@@ -188,6 +222,7 @@ mod tests {
             test = ("[7, 5, 6, 10, 11]", "[19, 23, 23, 29, 26]"),
             user = ("[1855]", "[3256]"),
         ),
-        //day_xx = (test = ("ToDo", "ToDo"), user = ("ToDo", "ToDo"),),
+        day_07 = (test = ("95437", "24933642"), user = ("1427048", "2940614"),),
+        //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );
 }
