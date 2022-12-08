@@ -1,59 +1,19 @@
-use crate::dyn_iterator::DynIterator;
+use crate::{dyn_iterator::DynIterator, error::*, tuple_extras::index_tup2};
 use eyre::{ensure, eyre, Result, WrapErr};
-use rhai::plugin::*;
-use rhai::{Array, EvalAltResult, Locked, Shared, INT};
-use std::{collections::HashSet, path::PathBuf};
+use rhai::{plugin::*, Array, EvalAltResult, Locked, Shared, INT};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Formatter, Result as FmtResult},
+    path::PathBuf,
+};
 
 mod aoc_data;
+mod assert;
+mod blob_extras;
 mod dyn_iterator;
+mod dynamic_image;
+mod error;
 mod int_array;
-
-fn index_not_found(index: impl Into<Dynamic>) -> Box<EvalAltResult> {
-    Box::new(EvalAltResult::ErrorIndexNotFound(
-        index.into(),
-        Position::NONE,
-    ))
-}
-
-#[export_module]
-mod blob_extras {
-    #[rhai_fn(pure)]
-    pub fn intersection(a: &mut rhai::Blob, b: rhai::Blob) -> rhai::Blob {
-        let a: HashSet<u8> = a.iter().copied().collect();
-        let b: HashSet<u8> = b.iter().copied().collect();
-        a.intersection(&b).copied().collect()
-    }
-
-    #[rhai_fn(pure)]
-    pub fn unique_count(a: &mut rhai::Blob) -> INT {
-        let a: HashSet<u8> = a.iter().copied().collect();
-        a.len().try_into().unwrap()
-    }
-
-    #[rhai_fn(pure, name = "==")]
-    pub fn eq_string(a: &mut rhai::Blob, b: ImmutableString) -> bool {
-        a == b.as_bytes()
-    }
-
-    pub fn strip_prefix(a: &mut rhai::Blob, prefix: ImmutableString) -> bool {
-        if a.starts_with(prefix.as_bytes()) {
-            a.copy_within(prefix.len().., 0);
-            a.truncate(a.len() - prefix.len());
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn rstrip_off(a: &mut rhai::Blob, delim: INT) {
-        if let Ok(delim) = u8::try_from(delim) {
-            if let Some(suff) = a.rsplit(|&b| b == delim).next() {
-                let len = suff.len() + 1;
-                a.truncate(a.len() - len);
-            }
-        }
-    }
-}
 
 #[export_module]
 mod string_extras {
@@ -86,49 +46,40 @@ mod int_extras {
 }
 
 #[export_module]
-mod assert {
-    use super::*;
-
-    struct Error(String);
-
-    impl Error {
-        pub fn create(e: String) -> Box<EvalAltResult> {
-            Box::new(EvalAltResult::ErrorSystem(
-                "Assertation failed".to_string(),
-                Box::new(Error(e)),
-            ))
+mod array_extras {
+    #[rhai_fn(pure, return_raw)]
+    pub fn sum(ctx: NativeCallContext, a: &mut rhai::Array) -> RhaiRes<INT> {
+        let mut ret = 0;
+        for val in a.iter() {
+            ret += val
+                .as_int()
+                .map_err(|e| mismatching_data_type(&ctx, "integer", e))?;
         }
+        Ok(ret)
+    }
+}
+
+#[export_module]
+mod tuple_extras {
+    #[rhai_fn(return_raw, index_get)]
+    pub fn index_int_int(ctx: NativeCallContext, tup: (INT, INT), index: INT) -> RhaiRes<INT> {
+        index_tup2(ctx, tup, index)
     }
 
-    impl std::error::Error for Error {}
-
-    impl std::fmt::Display for Error {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            std::fmt::Display::fmt(&self.0, f)
-        }
+    #[rhai_fn(name = "to_debug")]
+    pub fn to_debug_int_int(tup: (INT, INT)) -> String {
+        format!("{:?}", tup)
     }
 
-    impl std::fmt::Debug for Error {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            std::fmt::Debug::fmt(&self.0, f)
-        }
-    }
-
-    #[rhai_fn(name = "assert_eq", return_raw)]
-    pub fn assert_eq_int(a: INT, b: INT) -> Result<(), Box<EvalAltResult>> {
-        if a == b {
-            Ok(())
-        } else {
-            Err(Error::create(format!("{a} != {b}")))
-        }
-    }
-
-    #[rhai_fn(return_raw)]
-    pub fn assert(a: bool) -> Result<(), Box<EvalAltResult>> {
-        if a {
-            Ok(())
-        } else {
-            Err(Error::create(String::new()))
+    #[rhai_fn(skip)]
+    pub fn index_tup2<T>(ctx: NativeCallContext, tup: (T, T), index: INT) -> RhaiRes<T> {
+        match index {
+            0 => Ok(tup.0),
+            1 => Ok(tup.1),
+            _ => Err(Box::new(EvalAltResult::ErrorIndexNotFound(
+                index.into(),
+                ctx.position(),
+            ))),
         }
     }
 }
@@ -152,6 +103,9 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     engine.register_global_module(exported_module!(string_extras).into());
     engine.register_global_module(exported_module!(int_extras).into());
     engine.register_global_module(exported_module!(assert).into());
+    engine.register_global_module(exported_module!(dynamic_image).into());
+    engine.register_global_module(exported_module!(array_extras).into());
+    engine.register_global_module(exported_module!(tuple_extras).into());
 
     // ToDo: Is there no magic to register this in the module?
     engine.register_iterator::<aoc_data::Lines>();
@@ -159,6 +113,11 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     engine.register_iterator::<DynIterator<String>>();
     engine.register_iterator::<DynIterator<Vec<String>>>();
     engine.register_iterator::<DynIterator<Vec<Dynamic>>>();
+    engine.register_iterator::<DynIterator<dynamic_image::Row>>();
+    engine.register_iterator::<DynIterator<dynamic_image::Col>>();
+    engine.register_iterator::<DynIterator<dynamic_image::Pixel>>();
+    engine.register_iterator::<dynamic_image::Row>();
+    engine.register_iterator::<dynamic_image::Col>();
 
     engine
         .eval_file_with_scope(&mut scope, script_path.clone())
@@ -223,6 +182,7 @@ mod tests {
             user = ("[1855]", "[3256]"),
         ),
         day_07 = (test = ("95437", "24933642"), user = ("1427048", "2940614"),),
+        day_08 = (test = ("21", "8"), user = ("1708", "504000"),),
         //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );
 }

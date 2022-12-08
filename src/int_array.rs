@@ -20,7 +20,7 @@ mod int_array {
     }
 
     impl IntArray {
-        fn resolve_index(&self, index: INT) -> Result<usize, Box<EvalAltResult>> {
+        fn resolve_index(&self, ctx: &NativeCallContext, index: INT) -> RhaiRes<usize> {
             let len = self.values.len();
             if index < 0 {
                 let abs_index = index.checked_abs().unwrap_or(0) as usize;
@@ -37,7 +37,7 @@ mod int_array {
                     None
                 }
             }
-            .ok_or_else(|| index_not_found(index))
+            .ok_or_else(|| index_not_found(ctx, index))
         }
     }
 
@@ -81,11 +81,12 @@ mod int_array {
 
     #[rhai_fn(pure, name = "extract", return_raw)]
     pub fn extract_from(
+        ctx: NativeCallContext,
         array: &mut SharedIntArray,
         start: INT,
-    ) -> Result<SharedIntArray, Box<EvalAltResult>> {
+    ) -> RhaiRes<SharedIntArray> {
         let array = array.borrow();
-        let start = array.resolve_index(start)?;
+        let start = array.resolve_index(&ctx, start)?;
         Ok(IntArray::new_shared(array.values[start..].to_vec()))
     }
 
@@ -95,20 +96,25 @@ mod int_array {
     }
 
     #[rhai_fn(pure, index_get, return_raw)]
-    pub fn index_get(array: &mut SharedIntArray, index: INT) -> Result<INT, Box<EvalAltResult>> {
+    pub fn index_get(
+        ctx: NativeCallContext,
+        array: &mut SharedIntArray,
+        index: INT,
+    ) -> RhaiRes<INT> {
         let array = array.borrow();
-        let i = array.resolve_index(index)?;
+        let i = array.resolve_index(&ctx, index)?;
         Ok(array.values[i])
     }
 
     #[rhai_fn(index_set, return_raw)]
     pub fn index_set(
+        ctx: NativeCallContext,
         array: &mut SharedIntArray,
         index: INT,
         value: INT,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut array = array.borrow_mut();
-        let i = array.resolve_index(index)?;
+        let i = array.resolve_index(&ctx, index)?;
         array.values[i] = value;
         Ok(())
     }

@@ -1,10 +1,11 @@
 on save by-name Cargo.toml add cargo clippy --workspace
 on save by-ext .rs add cargo clippy --workspace
-on save by-ext .rs add cargo test
-on save by-prefix solutions/day-01 add cargo test -- day_01
-on save by-prefix solutions/day-02 add cargo test -- day_02
-on save by-prefix solutions/day-03 add cargo test -- day_03
-on save by-prefix solutions/day-04 add cargo test -- day_04
-on save by-prefix solutions/day-05 add cargo test -- day_05
-on save by-prefix solutions/day-06 add cargo test -- day_06
-on save by-prefix solutions/day-07 add cargo test -- day_07
+on save by-ext .rs add cargo test -- --test-threads 1
+on save by-prefix solutions/day-01 add cargo test -- day_01 --test-threads 1
+on save by-prefix solutions/day-02 add cargo test -- day_02 --test-threads 1
+on save by-prefix solutions/day-03 add cargo test -- day_03 --test-threads 1
+on save by-prefix solutions/day-04 add cargo test -- day_04 --test-threads 1
+on save by-prefix solutions/day-05 add cargo test -- day_05 --test-threads 1
+on save by-prefix solutions/day-06 add cargo test -- day_06 --test-threads 1
+on save by-prefix solutions/day-07 add cargo test -- day_07 --test-threads 1
+on save by-prefix solutions/day-08 add cargo test -- day_08 --test-threads 1
