@@ -9,11 +9,15 @@ mod dyn_iterator {
         it: Shared<Locked<Box<dyn Iterator<Item = T>>>>,
     }
 
-    impl<T> DynIterator<T> {
+    impl<T: 'static> DynIterator<T> {
         pub fn new(it: impl Iterator<Item = T> + 'static) -> Self {
             Self {
                 it: Shared::new(Locked::new(Box::new(it))),
             }
+        }
+
+        pub fn into_skip(self, ctx: &NativeCallContext, count: INT) -> RhaiRes<DynIterator<T>> {
+            Ok(DynIterator::new(self.skip(try_from(ctx, count)?)))
         }
     }
 

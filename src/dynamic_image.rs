@@ -116,6 +116,15 @@ mod dynamic_image {
         pixel_tup(ctx, img, (x, y))
     }
 
+    #[rhai_fn(return_raw, name = "pixel")]
+    pub fn pixel_by_index(ctx: NativeCallContext, img: SharedDynImg, i: INT) -> RhaiRes<Pixel> {
+        let index = {
+            let img = img.borrow();
+            img.calc_x_or_y(&ctx, "index", "len", img.data.len(), i)?
+        };
+        Ok(Pixel { index, img })
+    }
+
     pub fn pixels(img: SharedDynImg) -> DynIterator<Pixel> {
         let len = img.borrow().data.len();
         DynIterator::new((0..len).map(move |index| Pixel {
@@ -190,10 +199,15 @@ mod dynamic_image {
         Ok(Domino { a, b, img })
     }
 
-    fn iter_rows(img: SharedDynImg) -> impl DoubleEndedIterator<Item = Row> {
+    fn iter_rows(
+        img: SharedDynImg,
+        start_y: usize,
+        count: usize,
+    ) -> impl DoubleEndedIterator<Item = Row> {
         let it = {
             let img = img.borrow();
-            (0..img.data.len()).step_by(img.width)
+            let width = img.width;
+            (start_y..start_y + count.min(img.dim().1)).map(move |y| y * width)
         };
         it.map(move |start| Row {
             start,
@@ -210,11 +224,35 @@ mod dynamic_image {
     }
 
     pub fn rows(img: SharedDynImg) -> DynIterator<Row> {
-        DynIterator::new(iter_rows(img))
+        DynIterator::new(iter_rows(img, 0, usize::MAX))
+    }
+
+    #[rhai_fn(return_raw)]
+    pub fn row(ctx: NativeCallContext, img: SharedDynImg, y: INT) -> RhaiRes<DynIterator<Row>> {
+        let y = try_from(&ctx, y)?;
+        Ok(DynIterator::new(iter_rows(img, y, y + 1)))
+    }
+
+    #[rhai_fn(return_raw, name = "skip")]
+    pub fn rows_skip(
+        ctx: NativeCallContext,
+        it: DynIterator<Row>,
+        count: INT,
+    ) -> RhaiRes<DynIterator<Row>> {
+        it.into_skip(&ctx, count)
+    }
+
+    #[rhai_fn(return_raw, name = "skip")]
+    pub fn pixels_skip(
+        ctx: NativeCallContext,
+        it: DynIterator<Pixel>,
+        count: INT,
+    ) -> RhaiRes<DynIterator<Pixel>> {
+        it.into_skip(&ctx, count)
     }
 
     pub fn rrows(img: SharedDynImg) -> DynIterator<Row> {
-        DynIterator::new(iter_rows(img).rev())
+        DynIterator::new(iter_rows(img, 0, usize::MAX).rev())
     }
 
     pub fn cols(img: SharedDynImg) -> DynIterator<Col> {
@@ -399,9 +437,24 @@ mod dynamic_image {
         pix.pos(&ctx)
     }
 
+    #[rhai_fn(pure, get = "x", return_raw)]
+    pub fn pixel_get_x(ctx: NativeCallContext, pix: &mut Pixel) -> RhaiRes<INT> {
+        try_from(&ctx, pix.index % pix.img.borrow().width)
+    }
+
+    #[rhai_fn(pure, get = "y", return_raw)]
+    pub fn pixel_get_y(ctx: NativeCallContext, pix: &mut Pixel) -> RhaiRes<INT> {
+        try_from(&ctx, pix.index / pix.img.borrow().width)
+    }
+
     #[rhai_fn(pure, name = "as_int")]
     pub fn pixel_as_int(pix: &mut Pixel) -> INT {
         pix.img.borrow().data[pix.index].into()
+    }
+
+    #[rhai_fn(name = "set", return_raw)]
+    pub fn pixel_set_bool(ctx: NativeCallContext, pix: &mut Pixel, rhs: bool) -> RhaiRes<INT> {
+        pixel_apply_int(ctx, pix, |_| rhs.into())
     }
 
     #[rhai_fn(name = "set", return_raw)]

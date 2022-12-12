@@ -78,9 +78,22 @@ mod array_extras {
 
 #[export_module]
 mod tuple_extras {
+    type IntInt = (INT, INT);
+
     #[rhai_fn(return_raw, index_get)]
-    pub fn index_int_int(ctx: NativeCallContext, tup: (INT, INT), index: INT) -> RhaiRes<INT> {
+    pub fn index_get_int_int(ctx: NativeCallContext, tup: (INT, INT), index: INT) -> RhaiRes<INT> {
         index_tup2(ctx, tup, index)
+    }
+
+    #[rhai_fn(return_raw, index_set)]
+    pub fn index_set_int_int(
+        ctx: NativeCallContext,
+        tup: &mut IntInt,
+        index: INT,
+        value: INT,
+    ) -> RhaiRes<()> {
+        *index_mut_tup2(ctx, tup, index)? = value;
+        Ok(())
     }
 
     #[rhai_fn(name = "to_debug")]
@@ -107,6 +120,22 @@ mod tuple_extras {
         match index {
             0 => Ok(tup.0),
             1 => Ok(tup.1),
+            _ => Err(Box::new(EvalAltResult::ErrorIndexNotFound(
+                index.into(),
+                ctx.position(),
+            ))),
+        }
+    }
+
+    #[rhai_fn(skip)]
+    pub fn index_mut_tup2<'a, T>(
+        ctx: NativeCallContext,
+        tup: &'a mut (T, T),
+        index: INT,
+    ) -> RhaiRes<&'a mut T> {
+        match index {
+            0 => Ok(&mut tup.0),
+            1 => Ok(&mut tup.1),
             _ => Err(Box::new(EvalAltResult::ErrorIndexNotFound(
                 index.into(),
                 ctx.position(),
@@ -250,7 +279,16 @@ struct Args {
 
 fn main() -> Result<()> {
     let Args { day, data } = clap::Parser::parse();
-    println!("Result: {:?}", run_script(day, &data));
+    for (i, data) in run_script(day, &data)?.iter().enumerate() {
+        if data.contains('\n') {
+            println!("Part {}:", i + 1);
+            for l in data.lines() {
+                println!("  {l}");
+            }
+        } else {
+            println!("Part {}: {data}", i + 1);
+        }
+    }
     Ok(())
 }
 
@@ -258,10 +296,33 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
 
+    fn check_result(got: &str, want: &str, day: u8, part: &str, data: &str) {
+        if got == want {
+            return;
+        } else if got.find('\n').is_some() {
+            println!("Want:\n{want}\n");
+            println!("Got:\n{got}\n");
+            let mut got = got.lines().enumerate();
+            for (want, got) in want.lines().enumerate().zip(&mut got) {
+                assert_eq!(got, want, "Day {day} {part} failed on {data}");
+            }
+        } else {
+            assert_eq!(got, want, "Day {day} {part} failed on {data}");
+        }
+    }
+
+    fn run_test(day: u8, data: &str, part1: &str, part2: &str) -> Result<()> {
+        println!("\n\nRunning script with {data}");
+        let res = run_script(day, data)?;
+        check_result(&res[0], part1, day, "part1", data);
+        check_result(&res[1], part2, day, "part2", data);
+        Ok(())
+    }
+
     macro_rules! impl_tests {
         ($(
             $day:ident = (
-                $($name:ident=($p1:literal, $p2:literal),)+
+                $($name:ident=($p1:expr, $p2:expr),)+
             )
         ,)+) => {$(
             mod $day {$(
@@ -269,11 +330,7 @@ mod tests {
                 fn $name() -> super::Result<()> {
                     let day = stringify!($day).split_once('_').unwrap().1.parse()?;
                     let data = concat!(stringify!($name), ".dat");
-                    println!("\n\nRunning script with {data}");
-                    let res = super::run_script(day, data)?;
-                    assert_eq!(res[0], $p1, "day {day} part1 failed");
-                    assert_eq!(res[1], $p2, "day {day} part2 failed");
-                    Ok(())
+                    super::run_test(day, data, $p1, $p2)
                 }
             )+}
         )+}
@@ -295,6 +352,30 @@ mod tests {
             test = ("13", "1"),
             test2 = ("88", "36"),
             user = ("6470", "2658"),
+        ),
+        day_10 = (
+            test = (
+                "13140",
+                concat!(
+                    "##..##..##..##..##..##..##..##..##..##..\n",
+                    "###...###...###...###...###...###...###.\n",
+                    "####....####....####....####....####....\n",
+                    "#####.....#####.....#####.....#####.....\n",
+                    "######......######......######......####\n",
+                    "#######.......#######.......#######.....\n",
+                )
+            ),
+            user = (
+                "12560",
+                concat!(
+                    "###..#....###...##..####.###...##..#....\n",
+                    "#..#.#....#..#.#..#.#....#..#.#..#.#....\n",
+                    "#..#.#....#..#.#..#.###..###..#....#....\n",
+                    "###..#....###..####.#....#..#.#....#....\n",
+                    "#....#....#....#..#.#....#..#.#..#.#....\n",
+                    "#....####.#....#..#.#....###...##..####.\n",
+                )
+            ),
         ),
         //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );
