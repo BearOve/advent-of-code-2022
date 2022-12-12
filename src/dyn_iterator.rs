@@ -18,18 +18,33 @@ mod dyn_iterator {
     }
 
     #[rhai_fn(name = "split")]
-    pub fn lines_split_by_char(data: aoc_data::Lines, c: char) -> DynIterator<Vec<String>> {
-        DynIterator::new(data.map(move |v| v.split(c).map(String::from).collect()))
+    pub fn str_split_by_char(
+        data: DynIterator<ImmutableString>,
+        c: char,
+    ) -> DynIterator<Vec<ImmutableString>> {
+        DynIterator::new(data.map(move |v| v.split(c).map(|s| s.into()).collect()))
+    }
+
+    #[rhai_fn(name = "split_once")]
+    pub fn str_split_once_by_char(
+        data: DynIterator<ImmutableString>,
+        c: char,
+    ) -> DynIterator<(ImmutableString, ImmutableString)> {
+        DynIterator::new(data.map(move |v| {
+            v.split_once(c)
+                .map(|(a, b)| (a.into(), b.into()))
+                .unwrap_or((v, "".into()))
+        }))
     }
 
     #[rhai_fn(name = "split")]
     pub fn dyn_strvec_split_by_char(
-        data: DynIterator<Vec<String>>,
+        data: DynIterator<Vec<ImmutableString>>,
         c: char,
     ) -> DynIterator<Vec<Dynamic>> {
         DynIterator::new(data.map(move |v| {
             v.iter()
-                .map(|s| s.split(c).map(String::from).collect())
+                .map(|s| s.split(c).map(ImmutableString::from).collect())
                 .collect()
         }))
     }

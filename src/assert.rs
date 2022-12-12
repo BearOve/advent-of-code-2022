@@ -6,46 +6,56 @@ pub use self::assert::*;
 mod assert {
     use super::*;
 
-    struct Error(String);
+    #[derive(Clone)]
+    struct Error(ImmutableString);
 
     impl Error {
-        pub fn create(e: String) -> Box<EvalAltResult> {
-            Box::new(EvalAltResult::ErrorSystem(
-                "Assertation failed".to_string(),
-                Box::new(Error(e)),
+        fn new(s: impl Into<ImmutableString>) -> Self {
+            Self(s.into())
+        }
+
+        fn into_err(self, ctx: &NativeCallContext) -> Box<EvalAltResult> {
+            Box::new(EvalAltResult::ErrorRuntime(
+                Dynamic::from(self),
+                ctx.position(),
             ))
         }
     }
 
-    impl std::error::Error for Error {}
-
-    impl std::fmt::Display for Error {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            std::fmt::Display::fmt(&self.0, f)
-        }
-    }
-
-    impl std::fmt::Debug for Error {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            std::fmt::Debug::fmt(&self.0, f)
+    macro_rules! fail_if {
+        ($ctx:expr, $a:ident $op:tt $b:ident) => {
+            if $a $op $b {
+                Err(Error::new(
+                    format!(
+                        concat!(
+                            "Assertation failed: {}",
+                            stringify!($op),
+                            " {}",
+                        ),
+                        $a, $b,
+                    )
+                ).into_err(&$ctx))
+            } else {
+                Ok(())
+            }
         }
     }
 
     #[rhai_fn(name = "assert_eq", return_raw)]
-    pub fn assert_eq_int(a: INT, b: INT) -> RhaiRes<()> {
-        if a == b {
-            Ok(())
-        } else {
-            Err(Error::create(format!("{a} != {b}")))
-        }
+    pub fn assert_eq_int(ctx: NativeCallContext, a: INT, b: INT) -> RhaiRes<()> {
+        fail_if!(ctx, a != b)
     }
 
     #[rhai_fn(return_raw)]
-    pub fn assert(a: bool) -> RhaiRes<()> {
-        if a {
-            Ok(())
-        } else {
-            Err(Error::create(String::new()))
-        }
+    pub fn assert(ctx: NativeCallContext, a: bool) -> RhaiRes<()> {
+        fail_if!(ctx, a == false)
+    }
+
+    #[rhai_fn(return_raw)]
+    pub fn todo(ctx: NativeCallContext) -> RhaiRes<()> {
+        Err(Box::new(EvalAltResult::ErrorRuntime(
+            Dynamic::from("Not implemented"),
+            ctx.position(),
+        )))
     }
 }

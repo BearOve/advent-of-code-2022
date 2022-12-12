@@ -1,6 +1,6 @@
 use crate::{dyn_iterator::DynIterator, error::*, tuple_extras::index_tup2};
 use eyre::{ensure, eyre, Result, WrapErr};
-use rhai::{plugin::*, Array, EvalAltResult, Locked, Shared, INT};
+use rhai::{plugin::*, Array, Blob, EvalAltResult, Locked, Shared, FLOAT, INT};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter, Result as FmtResult},
@@ -15,19 +15,21 @@ mod dynamic_image;
 mod error;
 mod int_array;
 
+type SharedSet<T> = Shared<Locked<HashSet<T>>>;
+
 #[export_module]
 mod string_extras {
-    pub fn chunks(a: ImmutableString, len: INT) -> DynIterator<String> {
+    pub fn chunks(a: ImmutableString, len: INT) -> DynIterator<ImmutableString> {
         let len = usize::try_from(len).unwrap();
         let mut i = 0;
         DynIterator::new(std::iter::from_fn(move || {
             if let Some((end, _)) = a[i..].char_indices().nth(len) {
                 let end = end + i;
-                let ret = String::from(&a[i..end]);
+                let ret = a[i..end].into();
                 i = end;
                 Some(ret)
             } else if i < a.len() {
-                let ret = String::from(&a[i..]);
+                let ret = a[i..].into();
                 i = a.len();
                 Some(ret)
             } else {
@@ -39,9 +41,24 @@ mod string_extras {
 
 #[export_module]
 mod int_extras {
+    #[rhai_fn(name = "tuple")]
+    pub fn tuple_int_int(a: INT, b: INT) -> (INT, INT) {
+        (a, b)
+    }
+
     #[rhai_fn(name = "max")]
     pub fn max_int_int(a: INT, b: INT) -> INT {
         a.max(b)
+    }
+
+    #[rhai_fn(name = "min")]
+    pub fn min_int_int(a: INT, b: INT) -> INT {
+        a.min(b)
+    }
+
+    #[rhai_fn(name = "!")]
+    pub fn bitnot_int(a: INT) -> INT {
+        !a
     }
 }
 
@@ -71,6 +88,20 @@ mod tuple_extras {
         format!("{:?}", tup)
     }
 
+    #[rhai_fn(return_raw, index_get)]
+    pub fn index_str_str(
+        ctx: NativeCallContext,
+        tup: (ImmutableString, ImmutableString),
+        index: INT,
+    ) -> RhaiRes<ImmutableString> {
+        index_tup2(ctx, tup, index)
+    }
+
+    #[rhai_fn(name = "to_debug")]
+    pub fn to_debug_str_str(tup: (ImmutableString, ImmutableString)) -> String {
+        format!("{:?}", tup)
+    }
+
     #[rhai_fn(skip)]
     pub fn index_tup2<T>(ctx: NativeCallContext, tup: (T, T), index: INT) -> RhaiRes<T> {
         match index {
@@ -81,6 +112,83 @@ mod tuple_extras {
                 ctx.position(),
             ))),
         }
+    }
+
+    #[rhai_fn(name = "min")]
+    pub fn min_int_int(a: (INT, INT), b: (INT, INT)) -> (INT, INT) {
+        (a.0.min(b.0), a.1.min(b.1))
+    }
+
+    #[rhai_fn(name = "max")]
+    pub fn max_int_int(a: (INT, INT), b: (INT, INT)) -> (INT, INT) {
+        (a.0.max(b.0), a.1.max(b.1))
+    }
+
+    #[rhai_fn(name = "cmp")]
+    pub fn cmp_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> INT {
+        lhs.cmp(&rhs) as INT
+    }
+
+    #[rhai_fn(name = "==")]
+    pub fn eq_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs == rhs
+    }
+
+    #[rhai_fn(name = "!=")]
+    pub fn neq_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs != rhs
+    }
+
+    #[rhai_fn(name = "<")]
+    pub fn lt_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs < rhs
+    }
+
+    #[rhai_fn(name = "<=")]
+    pub fn le_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs <= rhs
+    }
+
+    #[rhai_fn(name = ">")]
+    pub fn gt_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs > rhs
+    }
+
+    #[rhai_fn(name = ">=")]
+    pub fn ge_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> bool {
+        lhs >= rhs
+    }
+
+    #[rhai_fn(name = "+")]
+    pub fn add_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> (INT, INT) {
+        (lhs.0 + rhs.0, lhs.1 + rhs.1)
+    }
+
+    #[rhai_fn(name = "-")]
+    pub fn sub_int_int(lhs: (INT, INT), rhs: (INT, INT)) -> (INT, INT) {
+        (lhs.0 - rhs.0, lhs.1 - rhs.1)
+    }
+
+    #[rhai_fn(name = "sign")]
+    pub fn sign_int_int(v: (INT, INT)) -> (INT, INT) {
+        (v.0.signum(), v.1.signum())
+    }
+
+    #[rhai_fn(name = "fixed_set")]
+    pub fn fixed_set_int_int(v: (INT, INT)) -> SharedSet<(INT, INT)> {
+        let mut ret = HashSet::new();
+        ret.insert(v);
+        Shared::new(Locked::new(ret))
+    }
+
+    #[rhai_fn(name = "insert")]
+    pub fn fixed_set_int_int_insert(set: &mut SharedSet<(INT, INT)>, v: (INT, INT)) -> bool {
+        set.borrow_mut().insert(v)
+    }
+
+    #[rhai_fn(name = "len", pure)]
+    pub fn fixed_set_int_int_len(set: &mut SharedSet<(INT, INT)>) -> INT {
+        set.borrow_mut().len().try_into().unwrap()
     }
 }
 
@@ -108,10 +216,10 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     engine.register_global_module(exported_module!(tuple_extras).into());
 
     // ToDo: Is there no magic to register this in the module?
-    engine.register_iterator::<aoc_data::Lines>();
-    engine.register_iterator::<aoc_data::Blobs>();
-    engine.register_iterator::<DynIterator<String>>();
-    engine.register_iterator::<DynIterator<Vec<String>>>();
+    engine.register_iterator::<DynIterator<ImmutableString>>();
+    engine.register_iterator::<DynIterator<Blob>>();
+    engine.register_iterator::<DynIterator<(ImmutableString, ImmutableString)>>();
+    engine.register_iterator::<DynIterator<Vec<ImmutableString>>>();
     engine.register_iterator::<DynIterator<Vec<Dynamic>>>();
     engine.register_iterator::<DynIterator<dynamic_image::Row>>();
     engine.register_iterator::<DynIterator<dynamic_image::Col>>();
@@ -183,6 +291,11 @@ mod tests {
         ),
         day_07 = (test = ("95437", "24933642"), user = ("1427048", "2940614"),),
         day_08 = (test = ("21", "8"), user = ("1708", "504000"),),
+        day_09 = (
+            test = ("13", "1"),
+            test2 = ("88", "36"),
+            user = ("6470", "2658"),
+        ),
         //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );
 }

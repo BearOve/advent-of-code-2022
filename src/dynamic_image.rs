@@ -98,11 +98,7 @@ mod dynamic_image {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn push_row(
-        ctx: NativeCallContext,
-        img: &mut SharedDynImg,
-        row: rhai::Blob,
-    ) -> RhaiRes<()> {
+    pub fn push_row(ctx: NativeCallContext, img: &mut SharedDynImg, row: Blob) -> RhaiRes<()> {
         let mut img = img.borrow_mut();
         if row.len() != img.width {
             return Err(mismatching_data_type(
@@ -230,16 +226,20 @@ mod dynamic_image {
     }
 
     pub fn to_2bit_ascii_art(img: SharedDynImg) -> String {
+        to_ascii_art(img, "_X")
+    }
+
+    pub fn to_ascii_art(img: SharedDynImg, color_map: &str) -> String {
+        let color_map = color_map.as_bytes();
+        let last = color_map.last().unwrap();
+        assert!(color_map.is_ascii());
+
         let img = img.borrow();
         let (width, height) = img.dim();
         let mut ret = String::with_capacity((width + 1) * height);
         for row in img.data.chunks_exact(img.width) {
             for pix in row.iter().copied() {
-                if pix == 0 {
-                    ret.push('_');
-                } else {
-                    ret.push('X');
-                }
+                ret.push(char::from(*color_map.get(usize::from(pix)).unwrap_or(last)));
             }
             ret.push('\n');
         }
@@ -406,29 +406,71 @@ mod dynamic_image {
 
     #[rhai_fn(name = "set", return_raw)]
     pub fn pixel_set_int(ctx: NativeCallContext, pix: &mut Pixel, rhs: INT) -> RhaiRes<INT> {
-        let mut img = pix.img.borrow_mut();
-        Ok(INT::from(std::mem::replace(
-            &mut img.data[pix.index],
-            try_from(&ctx, rhs)?,
-        )))
+        pixel_apply_int(ctx, pix, |_| rhs)
     }
 
     #[rhai_fn(name = "-=", return_raw)]
     pub fn pixel_sub_int(ctx: NativeCallContext, pix: &mut Pixel, rhs: INT) -> RhaiRes<()> {
-        let mut img = pix.img.borrow_mut();
-        let pix = &mut img.data[pix.index];
-        let pix_int = INT::from(*pix);
-        *pix = try_from(&ctx, pix_int - rhs)?;
-        Ok(())
+        pixel_apply_int(ctx, pix, |lhs| lhs - rhs).map(|_| ())
     }
 
     #[rhai_fn(name = "+=", return_raw)]
     pub fn pixel_add_int(ctx: NativeCallContext, pix: &mut Pixel, rhs: INT) -> RhaiRes<()> {
+        pixel_apply_int(ctx, pix, |lhs| lhs + rhs).map(|_| ())
+    }
+
+    #[rhai_fn(name = "|=", return_raw)]
+    pub fn pixel_bitor_int(ctx: NativeCallContext, pix: &mut Pixel, rhs: INT) -> RhaiRes<()> {
+        pixel_apply_int(ctx, pix, |lhs| lhs | rhs).map(|_| ())
+    }
+
+    #[rhai_fn(name = "&=", return_raw)]
+    pub fn pixel_bitand_int(ctx: NativeCallContext, pix: &mut Pixel, rhs: INT) -> RhaiRes<()> {
+        pixel_apply_int(ctx, pix, |lhs| lhs & rhs).map(|_| ())
+    }
+
+    #[rhai_fn(name = "move", return_raw)]
+    pub fn pixel_move(
+        ctx: NativeCallContext,
+        pix: &mut Pixel,
+        add_x: INT,
+        add_y: INT,
+    ) -> RhaiRes<()> {
+        let (x, y) = pix.pos(&ctx)?;
+        *pix = pixel(ctx, pix.img.clone(), x + add_x, y + add_y)?;
+        Ok(())
+    }
+
+    #[rhai_fn(pure, name = "euc_dist", return_raw)]
+    pub fn pixel_euc_dist(ctx: NativeCallContext, pix: &mut Pixel, other: Pixel) -> RhaiRes<FLOAT> {
+        let (a_x, a_y) = pix.pos(&ctx)?;
+        let (b_x, b_y) = other.pos(&ctx)?;
+        let x_dist = (a_x - b_x) as FLOAT;
+        let y_dist = (a_y - b_y) as FLOAT;
+        Ok(((x_dist * x_dist) - (y_dist * y_dist)).abs().sqrt())
+    }
+
+    #[rhai_fn(pure, name = "diff", return_raw)]
+    pub fn pixel_diff(
+        ctx: NativeCallContext,
+        pix: &mut Pixel,
+        other: Pixel,
+    ) -> RhaiRes<(INT, INT)> {
+        let (a_x, a_y) = pix.pos(&ctx)?;
+        let (b_x, b_y) = other.pos(&ctx)?;
+        Ok(((a_x - b_x), (a_y - b_y)))
+    }
+
+    fn pixel_apply_int(
+        ctx: NativeCallContext,
+        pix: &mut Pixel,
+        f: impl FnOnce(INT) -> INT,
+    ) -> RhaiRes<INT> {
         let mut img = pix.img.borrow_mut();
         let pix = &mut img.data[pix.index];
         let pix_int = INT::from(*pix);
-        *pix = try_from(&ctx, pix_int + rhs)?;
-        Ok(())
+        *pix = try_from(&ctx, f(pix_int))?;
+        Ok(pix_int)
     }
 
     #[rhai_fn(pure, name = "to_debug")]

@@ -28,24 +28,9 @@ mod aoc_data {
         }
     }
 
-    pub fn lines(data: SharedAocData) -> Lines {
-        Lines { data }
-    }
-
-    pub fn blobs(data: SharedAocData) -> Blobs {
-        Blobs { data }
-    }
-
-    #[derive(Clone)]
-    pub struct Lines {
-        data: SharedAocData,
-    }
-
-    impl Iterator for Lines {
-        type Item = String;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            let mut data = self.data.borrow_mut();
+    pub fn lines(data: SharedAocData) -> DynIterator<ImmutableString> {
+        DynIterator::new(std::iter::from_fn(move || {
+            let mut data = data.borrow_mut();
             let mut ret = String::new();
             let actual = data
                 .file
@@ -55,20 +40,13 @@ mod aoc_data {
             while matches!(ret.as_bytes().last(), Some(b'\r' | b'\n')) {
                 ret.pop();
             }
-            (actual > 0).then_some(ret)
-        }
+            (actual > 0).then_some(ret.into())
+        }))
     }
 
-    #[derive(Clone)]
-    pub struct Blobs {
-        data: SharedAocData,
-    }
-
-    impl Iterator for Blobs {
-        type Item = rhai::Blob;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            let mut data = self.data.borrow_mut();
+    pub fn blobs(data: SharedAocData) -> DynIterator<Blob> {
+        DynIterator::new(std::iter::from_fn(move || {
+            let mut data = data.borrow_mut();
             let mut ret = Vec::new();
             let actual = data
                 .file
@@ -79,6 +57,6 @@ mod aoc_data {
                 ret.pop();
             }
             (actual > 0).then_some(ret)
-        }
+        }))
     }
 }
