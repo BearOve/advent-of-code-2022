@@ -37,6 +37,15 @@ mod string_extras {
             }
         }))
     }
+
+    #[rhai_fn(pure)]
+    pub fn strip_prefix(a: &mut ImmutableString, prefix: ImmutableString) -> Dynamic {
+        if let Some(res) = a.strip_prefix(prefix.as_str()) {
+            Dynamic::from(ImmutableString::from(res))
+        } else {
+            Dynamic::UNIT
+        }
+    }
 }
 
 #[export_module]
@@ -247,6 +256,7 @@ fn run_script(day: u8, data_name: &str) -> Result<[String; 2]> {
     // ToDo: Is there no magic to register this in the module?
     engine.register_iterator::<DynIterator<ImmutableString>>();
     engine.register_iterator::<DynIterator<Blob>>();
+    engine.register_iterator::<Vec<INT>>();
     engine.register_iterator::<DynIterator<(ImmutableString, ImmutableString)>>();
     engine.register_iterator::<DynIterator<Vec<ImmutableString>>>();
     engine.register_iterator::<DynIterator<Vec<Dynamic>>>();
@@ -376,6 +386,10 @@ mod tests {
                     "#....####.#....#..#.#....###...##..####.\n",
                 )
             ),
+        ),
+        day_11 = (
+            test = ("10605", "2713310158"),
+            user = ("72884", "15310845153"),
         ),
         //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );

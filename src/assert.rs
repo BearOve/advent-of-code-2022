@@ -46,6 +46,11 @@ mod assert {
         fail_if!(ctx, a != b)
     }
 
+    #[rhai_fn(name = "assert_eq", return_raw)]
+    pub fn assert_eq_str(ctx: NativeCallContext, a: &str, b: &str) -> RhaiRes<()> {
+        fail_if!(ctx, a != b)
+    }
+
     #[rhai_fn(return_raw)]
     pub fn assert(ctx: NativeCallContext, a: bool) -> RhaiRes<()> {
         fail_if!(ctx, a == false)

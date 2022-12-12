@@ -26,22 +26,30 @@ mod aoc_data {
 
             Ok(Shared::new(RefCell::new(Self { path, file })))
         }
-    }
 
-    pub fn lines(data: SharedAocData) -> DynIterator<ImmutableString> {
-        DynIterator::new(std::iter::from_fn(move || {
-            let mut data = data.borrow_mut();
+        pub fn read_line(&mut self) -> Option<ImmutableString> {
             let mut ret = String::new();
-            let actual = data
+            let actual = self
                 .file
                 .read_line(&mut ret)
-                .wrap_err_with(|| format!("Failed to read the next line from {:?}", data.path))
+                .wrap_err_with(|| format!("Failed to read the next line from {:?}", self.path))
                 .unwrap(); // ToDo: Fallible iterator support?
             while matches!(ret.as_bytes().last(), Some(b'\r' | b'\n')) {
                 ret.pop();
             }
             (actual > 0).then_some(ret.into())
-        }))
+        }
+    }
+
+    pub fn next_line(data: &mut SharedAocData) -> Dynamic {
+        data.borrow_mut()
+            .read_line()
+            .map(Dynamic::from)
+            .unwrap_or(Dynamic::UNIT)
+    }
+
+    pub fn lines(data: SharedAocData) -> DynIterator<ImmutableString> {
+        DynIterator::new(std::iter::from_fn(move || data.borrow_mut().read_line()))
     }
 
     pub fn blobs(data: SharedAocData) -> DynIterator<Blob> {

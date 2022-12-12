@@ -60,6 +60,11 @@ mod int_array {
     }
 
     #[rhai_fn(pure)]
+    pub fn len(array: &mut SharedIntArray) -> INT {
+        array.borrow().values.len().try_into().unwrap()
+    }
+
+    #[rhai_fn(pure)]
     pub fn max(array: &mut SharedIntArray) -> INT {
         array.borrow().values.iter().copied().max().unwrap_or(0)
     }
@@ -88,6 +93,13 @@ mod int_array {
         let array = array.borrow();
         let start = array.resolve_index(&ctx, start)?;
         Ok(IntArray::new_shared(array.values[start..].to_vec()))
+    }
+
+    pub fn drain(array: &mut SharedIntArray) -> Vec<INT> {
+        let mut array = array.borrow_mut();
+        let ret = array.values.clone();
+        array.values.clear();
+        ret
     }
 
     #[rhai_fn(pure)]
