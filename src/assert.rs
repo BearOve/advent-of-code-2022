@@ -16,7 +16,7 @@ mod assert {
 
         fn into_err(self, ctx: &NativeCallContext) -> Box<EvalAltResult> {
             Box::new(EvalAltResult::ErrorRuntime(
-                Dynamic::from(self),
+                Dynamic::from(self.0),
                 ctx.position(),
             ))
         }
@@ -28,7 +28,7 @@ mod assert {
                 Err(Error::new(
                     format!(
                         concat!(
-                            "Assertation failed: {}",
+                            "Assertation failed: {} ",
                             stringify!($op),
                             " {}",
                         ),

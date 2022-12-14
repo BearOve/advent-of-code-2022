@@ -14,3 +14,4 @@ on save by-prefix solutions/day-09 add cargo test -- day_09 --test-threads 1
 on save by-prefix solutions/day-10 add cargo test -- day_10 --test-threads 1
 on save by-prefix solutions/day-11 add cargo test --release -- day_11 --test-threads 1
 on save by-prefix solutions/day-12 add cargo test -- day_12 --test-threads 1
+on save by-prefix solutions/day-13 add cargo test -- day_13 --test-threads 1
