@@ -71,15 +71,33 @@ mod int_extras {
     }
 }
 
+fn iter_ints<'a>(
+    ctx: &'a NativeCallContext<'a>,
+    a: &'a rhai::Array,
+) -> impl ExactSizeIterator<Item = RhaiRes<INT>> + 'a {
+    a.iter().map(move |val| {
+        val.as_int()
+            .map_err(|e| mismatching_data_type(ctx, "integer", e))
+    })
+}
+
 #[export_module]
 mod array_extras {
+
     #[rhai_fn(pure, return_raw)]
     pub fn sum(ctx: NativeCallContext, a: &mut rhai::Array) -> RhaiRes<INT> {
         let mut ret = 0;
-        for val in a.iter() {
-            ret += val
-                .as_int()
-                .map_err(|e| mismatching_data_type(&ctx, "integer", e))?;
+        for val in super::iter_ints(&ctx, a) {
+            ret += val?;
+        }
+        Ok(ret)
+    }
+
+    #[rhai_fn(pure, return_raw)]
+    pub fn min(ctx: NativeCallContext, a: &mut rhai::Array) -> RhaiRes<INT> {
+        let mut ret = INT::MAX;
+        for val in super::iter_ints(&ctx, a) {
+            ret = ret.min(val?);
         }
         Ok(ret)
     }
@@ -217,6 +235,16 @@ mod tuple_extras {
         let mut ret = HashSet::new();
         ret.insert(v);
         Shared::new(Locked::new(ret))
+    }
+
+    #[rhai_fn(name = "contains", name = "in", pure)]
+    pub fn fixed_set_int_int_contains(set: &mut SharedSet<(INT, INT)>, v: (INT, INT)) -> bool {
+        set.borrow().contains(&v)
+    }
+
+    #[rhai_fn(name = "clone", pure)]
+    pub fn fixed_set_int_int_clone(set: &mut SharedSet<(INT, INT)>) -> SharedSet<(INT, INT)> {
+        Shared::new(Locked::new(set.borrow().clone()))
     }
 
     #[rhai_fn(name = "insert")]
@@ -391,6 +419,7 @@ mod tests {
             test = ("10605", "2713310158"),
             user = ("72884", "15310845153"),
         ),
+        day_12 = (test = ("31", "29"), user = ("456", "454"),),
         //day_xx = (test = ("ToDo: test.dat", "ToDo: test.dat"), user = ("ToDo: user.dat", "ToDo: user.dat"),),
     );
 }

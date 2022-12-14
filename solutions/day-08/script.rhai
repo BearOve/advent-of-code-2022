@@ -6,7 +6,7 @@ fn update_counts_for_row(count_map, it) {
         let pix_val = pix.as_int();
         if pix_val > val {
             val = pix_val;
-            if count_map.pixel(pix.position()).set(1) == 0 {
+            if count_map.pixel(pix.pos).set(1) == 0 {
                 ret += 1;
             }
         }

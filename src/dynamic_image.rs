@@ -8,7 +8,7 @@ mod dynamic_image {
 
     pub struct DynamicImage {
         width: usize,
-        data: Vec<u8>,
+        data: Vec<u32>,
     }
 
     impl DynamicImage {
@@ -107,7 +107,7 @@ mod dynamic_image {
                 format!("blob of len {}", row.len()),
             ));
         }
-        img.data.extend_from_slice(&row);
+        img.data.extend(row.into_iter().map(u32::from));
         Ok(())
     }
 
@@ -228,9 +228,13 @@ mod dynamic_image {
     }
 
     #[rhai_fn(return_raw)]
-    pub fn row(ctx: NativeCallContext, img: SharedDynImg, y: INT) -> RhaiRes<DynIterator<Row>> {
-        let y = try_from(&ctx, y)?;
-        Ok(DynIterator::new(iter_rows(img, y, y + 1)))
+    pub fn row(ctx: NativeCallContext, img: SharedDynImg, y: INT) -> RhaiRes<Row> {
+        let start = {
+            let img = img.borrow();
+            let (width, height) = img.dim();
+            img.calc_x_or_y(&ctx, "y", "height", height, y)? * width
+        };
+        Ok(Row { start, img })
     }
 
     #[rhai_fn(return_raw, name = "skip")]
@@ -263,6 +267,32 @@ mod dynamic_image {
         DynIterator::new(iter_cols(img).rev())
     }
 
+    #[rhai_fn(pure, return_raw)]
+    pub fn crop(
+        ctx: NativeCallContext,
+        img: &mut SharedDynImg,
+        sx: INT,
+        sy: INT,
+        ex: INT,
+        ey: INT,
+    ) -> RhaiRes<SharedDynImg> {
+        let img = img.borrow();
+        let rect = img.calc_rect(&ctx, (sx, sy, ex, ey))?;
+        let mut data = Vec::with_capacity(rect.width * rect.height);
+
+        for row in img.data[rect.y * img.width..]
+            .chunks(rect.stride)
+            .take(rect.height)
+        {
+            data.extend_from_slice(&row[rect.x..rect.x + rect.width]);
+        }
+
+        Ok(Shared::new(Locked::new(DynamicImage {
+            width: rect.width,
+            data,
+        })))
+    }
+
     pub fn to_2bit_ascii_art(img: SharedDynImg) -> String {
         to_ascii_art(img, "_X")
     }
@@ -277,7 +307,7 @@ mod dynamic_image {
         let mut ret = String::with_capacity((width + 1) * height);
         for row in img.data.chunks_exact(img.width) {
             for pix in row.iter().copied() {
-                ret.push(char::from(*color_map.get(usize::from(pix)).unwrap_or(last)));
+                ret.push(char::from(*color_map.get(pix as usize).unwrap_or(last)));
             }
             ret.push('\n');
         }
@@ -364,13 +394,18 @@ mod dynamic_image {
     }
 
     impl Pixel {
-        fn raw_pos(&self) -> (usize, usize, usize) {
-            let width = self.img.borrow().width;
-            (self.index % width, self.index / width, width)
+        fn raw_pos(&self) -> (usize, usize, usize, usize) {
+            let img = self.img.borrow();
+            (
+                self.index % img.width,
+                self.index / img.width,
+                img.width,
+                img.data.len(),
+            )
         }
 
         fn pos(&self, ctx: &NativeCallContext) -> RhaiRes<(INT, INT)> {
-            let (x, y, _) = self.raw_pos();
+            let (x, y, _, _) = self.raw_pos();
             Ok((try_from(ctx, x)?, try_from(ctx, y)?))
         }
 
@@ -381,7 +416,7 @@ mod dynamic_image {
 
     impl Debug for Pixel {
         fn fmt(&self, f: &mut Formatter) -> FmtResult {
-            let (x, y, _) = self.raw_pos();
+            let (x, y, _, _) = self.raw_pos();
             let value = self.value();
             f.debug_struct("Pixel")
                 .field("x", &x)
@@ -393,7 +428,7 @@ mod dynamic_image {
 
     #[rhai_fn(name = "right_pixels")]
     pub fn pixel_right_pixels(mut pix: Pixel) -> DynIterator<Pixel> {
-        let (x, _, width) = pix.raw_pos();
+        let (x, _, width, _) = pix.raw_pos();
 
         DynIterator::new((x + 1..width).map(move |_| {
             pix.index += 1;
@@ -403,7 +438,7 @@ mod dynamic_image {
 
     #[rhai_fn(name = "left_pixels")]
     pub fn pixel_left_pixels(mut pix: Pixel) -> DynIterator<Pixel> {
-        let (x, _, _) = pix.raw_pos();
+        let (x, _, _, _) = pix.raw_pos();
 
         DynIterator::new((0..x).map(move |_| {
             pix.index -= 1;
@@ -413,7 +448,7 @@ mod dynamic_image {
 
     #[rhai_fn(name = "up_pixels")]
     pub fn pixel_up_pixels(mut pix: Pixel) -> DynIterator<Pixel> {
-        let (_, y, width) = pix.raw_pos();
+        let (_, y, width, _) = pix.raw_pos();
 
         DynIterator::new((0..y).map(move |_| {
             pix.index -= width;
@@ -423,8 +458,8 @@ mod dynamic_image {
 
     #[rhai_fn(name = "down_pixels")]
     pub fn pixel_down_pixels(mut pix: Pixel) -> DynIterator<Pixel> {
-        let (width, height) = pix.img.borrow().dim();
-        let y = pix.index / width;
+        let (_, y, width, data_len) = pix.raw_pos();
+        let height = data_len / width;
 
         DynIterator::new((y + 1..height).map(move |_| {
             pix.index += width;
@@ -432,7 +467,24 @@ mod dynamic_image {
         }))
     }
 
-    #[rhai_fn(pure, name = "position", return_raw)]
+    #[rhai_fn(name = "ortho_pixels")]
+    #[allow(clippy::unnecessary_lazy_evaluations)] // rust-clippy/issues/10071
+    pub fn pixel_ortho_pixels(pix: Pixel) -> DynIterator<Pixel> {
+        let (x, _, width, data_len) = pix.raw_pos();
+        let tmp = [
+            pix.index.checked_sub(width),
+            (x + 1 < width).then(|| pix.index + 1),
+            (x > 0).then(|| pix.index - 1),
+            (pix.index + width < data_len).then(|| pix.index + width),
+        ];
+
+        DynIterator::new(tmp.into_iter().flatten().map(move |index| Pixel {
+            index,
+            img: pix.img.clone(),
+        }))
+    }
+
+    #[rhai_fn(pure, get = "pos", return_raw)]
     pub fn pixel_position(ctx: NativeCallContext, pix: &mut Pixel) -> RhaiRes<(INT, INT)> {
         pix.pos(&ctx)
     }
